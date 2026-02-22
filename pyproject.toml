@@ -3,10 +3,9 @@ name = "maison"
 version = "0.1.0"
 description = "Run Claude Code safely inside Daytona sandboxes"
 license = "MIT"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 dependencies = [
     "daytona>=0.100.0",
-    "eval_type_backport>=0.2.0; python_version < '3.10'",
 ]
 
 [project.scripts]
@@ -14,4 +13,4 @@ maison-cli = "maison.cli:main"
 
 [build-system]
 requires = ["setuptools>=64"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
