@@ -17,16 +17,31 @@ pip install .
 
 ## CLI
 
+After installing, the `maison-cli` command is available. It spins up a Daytona sandbox, installs Claude Code, and connects you to it.
+
+### Interactive mode
+
+Run `maison-cli` with no arguments to start a multi-turn chat session. Claude retains context across messages, and the sandbox is automatically deleted when you type `quit` or press Ctrl+C.
+
 ```bash
-# Interactive chat session
 maison-cli
-
-# Single prompt
-maison-cli -p "Write a hello world program in Python"
-
-# With custom instructions
-maison-cli --instructions "Always use type hints"
 ```
+
+### One-shot mode
+
+Pass `-p` to run a single prompt and exit:
+
+```bash
+maison-cli -p "Write a hello world program in Python"
+```
+
+### Options
+
+| Flag | Description |
+|---|---|
+| `-p`, `--prompt` | Run a single prompt and exit |
+| `--instructions` | Custom instructions appended to Claude's system prompt |
+| `--snapshot` | Daytona sandbox image (default: `daytonaio/sandbox:latest`) |
 
 ## Quick start
 
