@@ -4,10 +4,12 @@ import asyncio
 import json
 import os
 import shlex
+import uuid
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, Optional
 
 from daytona import AsyncDaytona, CreateSandboxFromSnapshotParams
+from daytona.common.process import SessionExecuteRequest
 
 
 @dataclass
@@ -45,6 +47,14 @@ class MaisonSandbox:
         self._sandbox = sandbox
         self._daytona = daytona
         self._anthropic_api_key = anthropic_api_key
+        self._session_id: Optional[str] = None
+
+    async def _ensure_session(self) -> str:
+        """Create a persistent session for running Claude Code commands."""
+        if self._session_id is None:
+            self._session_id = f"maison-{uuid.uuid4().hex[:8]}"
+            await self._sandbox.process.create_session(self._session_id)
+        return self._session_id
 
     async def stream(
         self,
@@ -69,11 +79,36 @@ class MaisonSandbox:
         Thinking tokens, text deltas, tool-use events, and the final result
         are all surfaced as ``StreamEvent`` instances.
         """
+        session_id = await self._ensure_session()
+
+        escaped_prompt = shlex.quote(prompt)
+        optional_flags = ""
+        if instructions:
+            optional_flags += (
+                f" --append-system-prompt {shlex.quote(instructions)}"
+            )
+        if continue_conversation:
+            optional_flags += " --continue"
+        cmd = (
+            f"ANTHROPIC_API_KEY={shlex.quote(self._anthropic_api_key)} "
+            f"claude --dangerously-skip-permissions "
+            f"-p {escaped_prompt} "
+            f"--output-format stream-json "
+            f"--include-partial-messages"
+            f"{optional_flags}"
+        )
+
+        # Run the command asynchronously so we can stream logs.
+        resp = await self._sandbox.process.execute_session_command(
+            session_id,
+            SessionExecuteRequest(command=cmd, run_async=True),
+        )
+        cmd_id = resp.cmd_id
+
         queue: asyncio.Queue[Optional[dict[str, Any]]] = asyncio.Queue()
         buffer: list[str] = []
 
-        def _on_data(data: bytes) -> None:
-            text = data.decode("utf-8", errors="replace")
+        def _parse_lines(text: str) -> None:
             buffer.append(text)
             combined = "".join(buffer)
             while "\n" in combined:
@@ -88,36 +123,21 @@ class MaisonSandbox:
             if combined:
                 buffer.append(combined)
 
-        pty = await self._sandbox.process.create_pty_session(
-            id="claude-stream",
-            on_data=_on_data,
-        )
-        await pty.wait_for_connection()
+        def _on_stdout(data: str) -> None:
+            _parse_lines(data)
 
-        escaped_prompt = shlex.quote(prompt)
-        escaped_key = shlex.quote(self._anthropic_api_key)
-        optional_flags = ""
-        if instructions:
-            optional_flags += (
-                f" --append-system-prompt {shlex.quote(instructions)}"
-            )
-        if continue_conversation:
-            optional_flags += " --continue"
-        cmd = (
-            f"ANTHROPIC_API_KEY={escaped_key} "
-            f"claude --dangerously-skip-permissions "
-            f"-p {escaped_prompt} "
-            f"--output-format stream-json "
-            f"--include-partial-messages"
-            f"{optional_flags}"
-        )
-        await pty.send_input(cmd + "\n")
+        def _on_stderr(data: str) -> None:
+            pass  # Ignore stderr for event parsing.
 
-        async def _wait_for_exit() -> None:
-            await pty.wait()
-            await queue.put(None)
+        async def _follow_logs() -> None:
+            try:
+                await self._sandbox.process.get_session_command_logs_async(
+                    session_id, cmd_id, _on_stdout, _on_stderr,
+                )
+            finally:
+                await queue.put(None)
 
-        wait_task = asyncio.create_task(_wait_for_exit())
+        log_task = asyncio.create_task(_follow_logs())
         try:
             while True:
                 raw = await queue.get()
@@ -128,8 +148,8 @@ class MaisonSandbox:
                     data=raw,
                 )
         finally:
-            if not wait_task.done():
-                wait_task.cancel()
+            if not log_task.done():
+                log_task.cancel()
 
     async def read_file(self, path: str) -> str:
         """Read a file from the sandbox filesystem."""
