@@ -5,7 +5,7 @@ Run [Claude Code](https://code.claude.com) with `--dangerously-skip-permissions`
 ## Install
 
 ```bash
-pip install -r requirements.txt
+pip install .
 ```
 
 ## Environment variables
@@ -14,6 +14,19 @@ pip install -r requirements.txt
 |---|---|---|
 | `DAYTONA_API_KEY` | Yes | Your [Daytona API key](https://www.daytona.io/docs/en/getting-started/) |
 | `ANTHROPIC_API_KEY` | Yes | Your Anthropic API key (or pass it directly) |
+
+## CLI
+
+```bash
+# Interactive chat session
+maison-cli
+
+# Single prompt
+maison-cli -p "Write a hello world program in Python"
+
+# With custom instructions
+maison-cli --instructions "Always use type hints"
+```
 
 ## Quick start
 
