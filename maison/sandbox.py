@@ -46,8 +46,25 @@ class MaisonSandbox:
         self._daytona = daytona
         self._anthropic_api_key = anthropic_api_key
 
-    async def stream(self, prompt: str) -> AsyncIterator[StreamEvent]:
+    async def stream(
+        self,
+        prompt: str,
+        instructions: Optional[str] = None,
+        continue_conversation: bool = False,
+    ) -> AsyncIterator[StreamEvent]:
         """Run Claude Code with *prompt* and yield events as they arrive.
+
+        Parameters
+        ----------
+        prompt:
+            The task or question for Claude Code.
+        instructions:
+            Optional custom instructions appended to Claude Code's system
+            prompt.  Use this to steer behaviour, set constraints, or provide
+            additional context.
+        continue_conversation:
+            If ``True``, continue the most recent conversation in this
+            sandbox so Claude retains context from previous messages.
 
         Thinking tokens, text deltas, tool-use events, and the final result
         are all surfaced as ``StreamEvent`` instances.
@@ -79,12 +96,20 @@ class MaisonSandbox:
 
         escaped_prompt = shlex.quote(prompt)
         escaped_key = shlex.quote(self._anthropic_api_key)
+        optional_flags = ""
+        if instructions:
+            optional_flags += (
+                f" --append-system-prompt {shlex.quote(instructions)}"
+            )
+        if continue_conversation:
+            optional_flags += " --continue"
         cmd = (
             f"ANTHROPIC_API_KEY={escaped_key} "
             f"claude --dangerously-skip-permissions "
             f"-p {escaped_prompt} "
             f"--output-format stream-json "
             f"--include-partial-messages"
+            f"{optional_flags}"
         )
         await pty.send_input(cmd + "\n")
 
