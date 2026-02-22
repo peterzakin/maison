@@ -190,13 +190,26 @@ class Maison:
             CreateSandboxFromSnapshotParams(**params_kwargs)
         )
 
+        # Install Node.js if not already present.
+        node_check = await sandbox.process.exec("node --version")
+        if node_check.exit_code != 0:
+            node_install = await sandbox.process.exec(
+                "curl -fsSL https://deb.nodesource.com/setup_lts.x | bash - "
+                "&& apt-get install -y nodejs"
+            )
+            if node_install.exit_code != 0:
+                await daytona.delete(sandbox)
+                raise RuntimeError(
+                    f"Failed to install Node.js: {node_install.result}"
+                )
+
         result = await sandbox.process.exec(
             "npm install -g @anthropic-ai/claude-code"
         )
         if result.exit_code != 0:
             await daytona.delete(sandbox)
             raise RuntimeError(
-                f"Failed to install Claude Code: {result.output}"
+                f"Failed to install Claude Code: {result.result}"
             )
 
         return MaisonSandbox(sandbox, daytona, api_key)
