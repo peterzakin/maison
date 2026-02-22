@@ -28,6 +28,13 @@ async def main():
     async for event in sandbox.stream("Write a hello world program in Python"):
         print(f"[{event.type}] {event.content}")
 
+    # Pass custom instructions to steer Claude's behaviour
+    async for event in sandbox.stream(
+        "Build a REST API for a todo app",
+        instructions="Always use type hints. Write tests for every endpoint.",
+    ):
+        print(f"[{event.type}] {event.content}")
+
     # Read a file Claude created inside the sandbox
     code = await sandbox.read_file("/home/daytona/hello.py")
     print(code)
@@ -49,9 +56,14 @@ Creates a Daytona sandbox and installs Claude Code.
 | `snapshot` | `"daytonaio/sandbox:latest"` | Daytona snapshot image |
 | `name` | `None` | Optional sandbox name |
 
-### `MaisonSandbox.stream(prompt) -> AsyncIterator[StreamEvent]`
+### `MaisonSandbox.stream(prompt, instructions=None) -> AsyncIterator[StreamEvent]`
 
 Runs Claude Code with the given prompt and yields `StreamEvent` objects as they arrive. Includes thinking tokens, text deltas, tool use, and the final result.
+
+| Parameter | Default | Description |
+|---|---|---|
+| `prompt` | *(required)* | The task or question for Claude Code |
+| `instructions` | `None` | Custom instructions appended to Claude Code's system prompt |
 
 ### `MaisonSandbox.read_file(path) -> str`
 
