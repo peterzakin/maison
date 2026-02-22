@@ -56,7 +56,7 @@ Creates a Daytona sandbox and installs Claude Code.
 | `snapshot` | `"daytonaio/sandbox:latest"` | Daytona snapshot image |
 | `name` | `None` | Optional sandbox name |
 
-### `MaisonSandbox.stream(prompt, instructions=None) -> AsyncIterator[StreamEvent]`
+### `MaisonSandbox.stream(prompt, ...) -> AsyncIterator[StreamEvent]`
 
 Runs Claude Code with the given prompt and yields `StreamEvent` objects as they arrive. Includes thinking tokens, text deltas, tool use, and the final result.
 
@@ -64,6 +64,7 @@ Runs Claude Code with the given prompt and yields `StreamEvent` objects as they 
 |---|---|---|
 | `prompt` | *(required)* | The task or question for Claude Code |
 | `instructions` | `None` | Custom instructions appended to Claude Code's system prompt |
+| `continue_conversation` | `False` | Continue the most recent conversation so Claude retains prior context |
 
 ### `MaisonSandbox.read_file(path) -> str`
 
@@ -80,6 +81,29 @@ Deletes the sandbox and frees resources.
 | `type` | `str` | Event type (e.g. `"thinking"`, `"text"`, `"tool_use"`, `"result"`) |
 | `data` | `dict` | Raw JSON event from Claude Code |
 | `content` | `str` | Convenience property that extracts text content |
+
+## Multi-turn conversations
+
+Use `continue_conversation=True` to send follow-up messages that retain full context from earlier turns:
+
+```python
+sandbox = await Maison.create_sandbox_for_claude()
+
+# First message — starts a new conversation
+async for event in sandbox.stream("Create a Python Flask app with a /health endpoint"):
+    if event.type == "text":
+        print(event.content, end="")
+
+# Second message — continues the same conversation
+async for event in sandbox.stream(
+    "Now add a /users endpoint with GET and POST",
+    continue_conversation=True,
+):
+    if event.type == "text":
+        print(event.content, end="")
+```
+
+See [`examples/multi_turn.py`](examples/multi_turn.py) for a complete interactive chat loop.
 
 ## How it works
 
