@@ -18,14 +18,20 @@ async def run(args: argparse.Namespace) -> None:
 
     is_first_message = True
     try:
+        def print_event(event: "StreamEvent") -> None:
+            if args.debug:
+                print(f"\n[DEBUG {event.type}] {event.data}", flush=True)
+            content = event.content
+            if content:
+                print(content, end="", flush=True)
+
         # One-shot mode: run a single prompt and exit.
         if args.prompt:
             async for event in sandbox.stream(
                 args.prompt,
                 instructions=args.instructions,
             ):
-                if event.type == "text":
-                    print(event.content, end="", flush=True)
+                print_event(event)
             print()
             return
 
@@ -48,8 +54,7 @@ async def run(args: argparse.Namespace) -> None:
                 instructions=args.instructions,
                 continue_conversation=not is_first_message,
             ):
-                if event.type == "text":
-                    print(event.content, end="", flush=True)
+                print_event(event)
             print("\n")
             is_first_message = False
     finally:
@@ -75,6 +80,11 @@ def main() -> None:
         "--snapshot",
         default="daytona-small",
         help="Daytona snapshot image (default: daytona-small).",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="Print raw event data for debugging.",
     )
     args = parser.parse_args()
     try:
