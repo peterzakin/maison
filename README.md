@@ -5,7 +5,7 @@ Run [Claude Code](https://code.claude.com) with `--dangerously-skip-permissions`
 ## Install
 
 ```bash
-pip install maison
+pip install -r requirements.txt
 ```
 
 ## Environment variables
