@@ -204,7 +204,8 @@ class Maison:
                 )
 
         result = await sandbox.process.exec(
-            "sudo npm install -g @anthropic-ai/claude-code"
+            "sudo chown -R $(whoami) $(npm prefix -g) "
+            "&& npm install -g @anthropic-ai/claude-code"
         )
         if result.exit_code != 0:
             await daytona.delete(sandbox)
