@@ -191,12 +191,13 @@ class Maison:
         )
 
         result = await sandbox.process.exec(
-            "sudo npm install -g @anthropic-ai/claude-code"
+            "sudo chown -R $(whoami) $(npm prefix -g) "
+            "&& npm install -g @anthropic-ai/claude-code"
         )
         if result.exit_code != 0:
             await daytona.delete(sandbox)
             raise RuntimeError(
-                f"Failed to install Claude Code: {result.output}"
+                f"Failed to install Claude Code: {result.result}"
             )
 
         return MaisonSandbox(sandbox, daytona, api_key)
