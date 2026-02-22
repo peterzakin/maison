@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "maison"
+version = "0.1.0"
+description = "Run Claude Code with --dangerously-skip-permissions safely in a Daytona sandbox"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+dependencies = [
+    "daytona>=0.100.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/maison-sdk/maison"
