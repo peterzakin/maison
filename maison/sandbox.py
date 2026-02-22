@@ -147,7 +147,7 @@ class Maison:
     async def create_sandbox_for_claude(
         *,
         anthropic_api_key: Optional[str] = None,
-        snapshot: str = "daytonaio/sandbox:latest",
+        snapshot: str = "daytona-small",
         name: Optional[str] = None,
     ) -> MaisonSandbox:
         """Spin up a Daytona sandbox with Claude Code pre-installed.

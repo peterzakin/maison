@@ -73,8 +73,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--snapshot",
-        default="daytonaio/sandbox:latest",
-        help="Daytona snapshot image (default: daytonaio/sandbox:latest).",
+        default="daytona-small",
+        help="Daytona snapshot image (default: daytona-small).",
     )
     args = parser.parse_args()
     try:

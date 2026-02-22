@@ -41,7 +41,7 @@ maison-cli -p "Write a hello world program in Python"
 |---|---|
 | `-p`, `--prompt` | Run a single prompt and exit |
 | `--instructions` | Custom instructions appended to Claude's system prompt |
-| `--snapshot` | Daytona sandbox image (default: `daytonaio/sandbox:latest`) |
+| `--snapshot` | Daytona sandbox image (default: `daytona-small`) |
 
 ## Quick start
 
@@ -81,7 +81,7 @@ Creates a Daytona sandbox and installs Claude Code.
 | Parameter | Default | Description |
 |---|---|---|
 | `anthropic_api_key` | `$ANTHROPIC_API_KEY` | Anthropic API key |
-| `snapshot` | `"daytonaio/sandbox:latest"` | Daytona snapshot image |
+| `snapshot` | `"daytona-small"` | Daytona snapshot image |
 | `name` | `None` | Optional sandbox name |
 
 ### `MaisonSandbox.stream(prompt, ...) -> AsyncIterator[StreamEvent]`
