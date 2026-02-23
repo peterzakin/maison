@@ -56,11 +56,29 @@ class MaisonSandbox:
             await self._sandbox.process.create_session(self._session_id)
         return self._session_id
 
+    async def _read_sandbox_file(self, path: str) -> str:
+        """Read a text file from the sandbox filesystem."""
+        data: bytes = await self._sandbox.fs.download_file(path)
+        return data.decode("utf-8", errors="replace")
+
+    async def _verify_claude_available(self, session_id: str) -> None:
+        """Check that the ``claude`` binary is accessible in the session."""
+        resp = await self._sandbox.process.execute_session_command(
+            session_id,
+            SessionExecuteRequest(command="which claude", run_async=False),
+        )
+        if resp.exit_code != 0:
+            raise RuntimeError(
+                "claude binary not found in session PATH. "
+                f"stdout={resp.stdout!r} stderr={resp.stderr!r}"
+            )
+
     async def stream(
         self,
         prompt: str,
         instructions: Optional[str] = None,
         continue_conversation: bool = False,
+        poll_interval: float = 0.3,
     ) -> AsyncIterator[StreamEvent]:
         """Run Claude Code with *prompt* and yield events as they arrive.
 
@@ -75,11 +93,23 @@ class MaisonSandbox:
         continue_conversation:
             If ``True``, continue the most recent conversation in this
             sandbox so Claude retains context from previous messages.
+        poll_interval:
+            Seconds between file polls for new output (default 0.3).
 
         Thinking tokens, text deltas, tool-use events, and the final result
         are all surfaced as ``StreamEvent`` instances.
         """
         session_id = await self._ensure_session()
+
+        # On first call, verify claude is reachable inside the session.
+        if not hasattr(self, "_claude_verified"):
+            await self._verify_claude_available(session_id)
+            self._claude_verified = True
+
+        run_id = uuid.uuid4().hex[:8]
+        out_file = f"/tmp/maison-{run_id}.jsonl"
+        err_file = f"/tmp/maison-{run_id}.err"
+        done_file = f"/tmp/maison-{run_id}.done"
 
         escaped_prompt = shlex.quote(prompt)
         optional_flags = ""
@@ -89,71 +119,103 @@ class MaisonSandbox:
             )
         if continue_conversation:
             optional_flags += " --continue"
+
+        # Redirect stdout/stderr to files and write the exit code to a
+        # marker file so we can detect completion.  The Daytona Session
+        # API's WebSocket-based log streaming does not capture output from
+        # Node.js processes (like Claude Code), so we poll the files instead.
+        # We also close stdin (< /dev/null) because sessions keep it open
+        # which causes Claude Code to block.
         cmd = (
             f"ANTHROPIC_API_KEY={shlex.quote(self._anthropic_api_key)} "
             f"claude --dangerously-skip-permissions "
             f"-p {escaped_prompt} "
             f"--output-format stream-json "
-            f"--include-partial-messages"
-            f"{optional_flags}"
+            f"--verbose"
+            f"{optional_flags} "
+            f"< /dev/null "
+            f"> {out_file} 2> {err_file}; "
+            f"echo $? > {done_file}"
         )
 
-        # Run the command asynchronously so we can stream logs.
-        resp = await self._sandbox.process.execute_session_command(
+        await self._sandbox.process.execute_session_command(
             session_id,
             SessionExecuteRequest(command=cmd, run_async=True),
         )
-        cmd_id = resp.cmd_id
 
-        queue: asyncio.Queue[Optional[dict[str, Any]]] = asyncio.Queue()
-        buffer: list[str] = []
+        # Poll the output file for new NDJSON lines.
+        offset = 0
+        partial_line = ""
 
-        def _parse_lines(text: str) -> None:
-            buffer.append(text)
-            combined = "".join(buffer)
-            while "\n" in combined:
-                line, combined = combined.split("\n", 1)
-                stripped = line.strip()
-                if stripped:
-                    try:
-                        queue.put_nowait(json.loads(stripped))
-                    except json.JSONDecodeError:
-                        pass
-            buffer.clear()
-            if combined:
-                buffer.append(combined)
-
-        def _on_stdout(data: str) -> None:
-            _parse_lines(data)
-
-        def _on_stderr(data: str) -> None:
-            pass  # Ignore stderr for event parsing.
-
-        async def _follow_logs() -> None:
+        while True:
+            # Read current file contents.
             try:
-                await self._sandbox.process.get_session_command_logs_async(
-                    session_id, cmd_id, _on_stdout, _on_stderr,
-                )
-            finally:
-                await queue.put(None)
+                content = await self._read_sandbox_file(out_file)
+            except Exception:
+                content = ""
 
-        log_task = asyncio.create_task(_follow_logs())
-        try:
-            while True:
-                raw = await queue.get()
-                if raw is None:
+            if len(content) > offset:
+                new_data = content[offset:]
+                offset = len(content)
+
+                text = partial_line + new_data
+                partial_line = ""
+
+                while "\n" in text:
+                    line, text = text.split("\n", 1)
+                    stripped = line.strip()
+                    if stripped:
+                        try:
+                            raw = json.loads(stripped)
+                            yield StreamEvent(
+                                type=raw.get("type", "unknown"),
+                                data=raw,
+                            )
+                        except json.JSONDecodeError:
+                            pass
+
+                # Keep any trailing incomplete line for next iteration.
+                if text:
+                    partial_line = text
+
+            # Check if the command has finished.
+            try:
+                done_content = await self._read_sandbox_file(done_file)
+                if done_content.strip():
+                    # Process any remaining partial line.
+                    if partial_line.strip():
+                        try:
+                            raw = json.loads(partial_line.strip())
+                            yield StreamEvent(
+                                type=raw.get("type", "unknown"),
+                                data=raw,
+                            )
+                        except json.JSONDecodeError:
+                            pass
+
+                    # Surface stderr if present.
+                    try:
+                        err_content = await self._read_sandbox_file(
+                            err_file
+                        )
+                        err_text = err_content.strip()
+                        if err_text:
+                            yield StreamEvent(
+                                type="stderr",
+                                data={"type": "stderr", "content": err_text},
+                            )
+                    except Exception:
+                        pass
+
                     break
-                yield StreamEvent(
-                    type=raw.get("type", "unknown"),
-                    data=raw,
-                )
-        finally:
-            if not log_task.done():
-                log_task.cancel()
+            except Exception:
+                pass  # done_file doesn't exist yet.
+
+            await asyncio.sleep(poll_interval)
 
     async def read_file(self, path: str) -> str:
         """Read a file from the sandbox filesystem."""
-        return await self._sandbox.fs.read_file(path)
+        return await self._read_sandbox_file(path)
 
     async def close(self) -> None:
         """Delete the sandbox and release resources."""

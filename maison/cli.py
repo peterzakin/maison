@@ -6,7 +6,7 @@ import argparse
 import asyncio
 import sys
 
-from maison import Maison
+from maison import Maison, StreamEvent
 
 
 async def run(args: argparse.Namespace) -> None:
@@ -18,9 +18,16 @@ async def run(args: argparse.Namespace) -> None:
 
     is_first_message = True
     try:
-        def print_event(event: "StreamEvent") -> None:
+        def print_event(event: StreamEvent) -> None:
             if args.debug:
                 print(f"\n[DEBUG {event.type}] {event.data}", flush=True)
+            if event.type == "stderr":
+                print(
+                    f"\n[stderr] {event.content}",
+                    file=sys.stderr,
+                    flush=True,
+                )
+                return
             content = event.content
             if content:
                 print(content, end="", flush=True)
