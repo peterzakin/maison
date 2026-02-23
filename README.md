@@ -50,32 +50,47 @@ maison-cli -p "Write a hello world program in Python"
 
 ## Quick start
 
+Spin up a sandbox, give Claude a task, then iterate on it with multi-turn follow-ups — all inside an isolated environment where Claude has full permissions:
+
 ```python
 import asyncio
 from maison import Maison
 
 async def main():
+    # 1. Create an isolated sandbox with Claude Code installed
     sandbox = await Maison.create_sandbox_for_claude()
 
-    # Stream thinking tokens and output from Claude
-    async for event in sandbox.stream("Write a hello world program in Python"):
-        print(f"[{event.type}] {event.content}")
+    try:
+        # 2. First turn — give Claude a task
+        async for event in sandbox.stream(
+            "Create a Python FastAPI app with a /health endpoint and a /items CRUD endpoint. "
+            "Include a requirements.txt.",
+            instructions="Use type hints everywhere. Keep it production-ready.",
+        ):
+            if event.type == "text":
+                print(event.content, end="", flush=True)
+        print()
 
-    # Pass custom instructions to steer Claude's behaviour
-    async for event in sandbox.stream(
-        "Build a REST API for a todo app",
-        instructions="Always use type hints. Write tests for every endpoint.",
-    ):
-        print(f"[{event.type}] {event.content}")
+        # 3. Follow-up turns — Claude remembers everything from above
+        async for event in sandbox.stream(
+            "Add pytest tests for both endpoints and make sure they pass.",
+            continue_conversation=True,
+        ):
+            if event.type == "text":
+                print(event.content, end="", flush=True)
+        print()
 
-    # Read a file Claude created inside the sandbox
-    code = await sandbox.read_file("/home/daytona/hello.py")
-    print(code)
-
-    await sandbox.close()
+        # 4. Pull files out of the sandbox
+        app_code = await sandbox.read_file("/home/daytona/main.py")
+        print(app_code)
+    finally:
+        # 5. Clean up — deletes the sandbox
+        await sandbox.close()
 
 asyncio.run(main())
 ```
+
+Each `stream()` call yields `StreamEvent` objects in real time. Set `continue_conversation=True` on follow-up turns so Claude retains the full context from earlier messages.
 
 ## API
 
