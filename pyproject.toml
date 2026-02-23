@@ -1,5 +1,5 @@
 [project]
-name = "maison"
+name = "claude-maison"
 version = "0.1.0"
 description = "Run Claude Code safely inside Daytona sandboxes"
 license = "MIT"
