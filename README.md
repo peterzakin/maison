@@ -10,6 +10,12 @@ pip install .
 
 Requires Python 3.10 or later.
 
+## Uninstall
+
+```bash
+pip uninstall maison
+```
+
 ## Environment variables
 
 | Variable | Required | Description |
