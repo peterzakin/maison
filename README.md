@@ -169,4 +169,4 @@ See [`examples/multi_turn.py`](examples/multi_turn.py) for a complete interactiv
 
 ## License
 
-MIT
+This project is released under the terms of the [LICENSE](LICENSE) file in this repository.
